@@ -1,2 +1,2 @@
-# BtPedal
-Interface for static bycicles with videogames
+# BtPedalClient
+Interface for static bicycles with videogames
