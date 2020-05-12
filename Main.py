@@ -42,11 +42,12 @@ def readAcc():
             if not data:
                 break
             if len(data)>0:
-                rAcc = pr.cFilter*pr.rAcc+(1-pr.cFilter)*ord(data)
-                if abs(pr.cAcc-rAcc)>pr.aSensitivity:
-                    pr.cAcc=rAcc 
+                pr.rAcc = pr.cFilter*pr.rAcc+(1-pr.cFilter)*ord(data)
+                if abs(pr.cAcc-pr.rAcc)>pr.aSensitivity:
+                    pr.cAcc=pr.rAcc 
     except:
         pr.running=False;
+    pr.rAcc = 0;
     try:
         client_sock.close()
         server_sock.close()
@@ -95,11 +96,12 @@ class EcoderGUI:
     
     def checkState(self):
         while pr.running:
-            self.accLabel.config(text=str(pr.cAcc))
+            self.accLabel.config(text=str(round(pr.rAcc,2)))
             sleep(0.2)
         try:
             self.accLabel.config(text="---")
             self.changeStateEntry('normal')
+            self.playButton.config(text="Start")  
         except:
             pass
         self.controlAccThread.join()
@@ -118,14 +120,9 @@ class EcoderGUI:
             self.changeStateEntry('disabled')
             self.checkStateThread=threading.Thread(target=self.checkState, args=())
             self.checkStateThread.start()
-            self.playButton.config(text="Start")
+            self.playButton.config(text="Stop")
         else:
-            self.changeStateEntry('normal')
             pr.running=False
-            self.controlAccThread.join()
-            self.readAccThread.join()
-            self.checkStateThread.join()
-            self.playButton.config(text="Stop")  
 
     def createVariables(self):
         self.keyForwardTk = tk.StringVar()
@@ -178,7 +175,7 @@ class EcoderGUI:
         self.loadParameters()
              
 app = EcoderGUI(root)
-root.title('Fun pedal')
+root.title('BtPedal')
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 root.mainloop()
