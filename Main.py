@@ -1,8 +1,8 @@
 # coding=utf-8
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-import Tkinter as tk
-import ttk
+import tkinter as tk
+from tkinter import ttk
 import bluetooth
 import pyautogui
 import threading
@@ -16,10 +16,11 @@ port = None
 client_sock = None
 
 def on_closing():
-    with open(pr.fPath, 'wb') as f:
+    with open(pr.fPath, 'wt') as f:
         writer = csv.writer(f, delimiter =' ');
         writer.writerow([pr.aSensitivity,pr.aThreshold,pr.cFilter,pr.keyForward]);
-        pr.running=False
+    pr.running=False
+    pr.killSystem=True
     root.destroy()
 
 def startBt():
@@ -28,10 +29,10 @@ def startBt():
     server_sock.bind(("", bluetooth.PORT_ANY))
     server_sock.listen(1)
     port = server_sock.getsockname()[1]
-    uuid = "94f39d29-7d6d-437d-973b-fba39e49d4ee"
-    bluetooth.advertise_service(server_sock, "SampleServer", service_id=uuid,
-                                service_classes=[uuid, bluetooth.SERIAL_PORT_CLASS],
+    bluetooth.advertise_service(server_sock, "SampleServer", service_id=pr.uuid,
+                                service_classes=[pr.uuid, bluetooth.SERIAL_PORT_CLASS],
                                 profiles=[bluetooth.SERIAL_PORT_PROFILE])
+    server_sock.settimeout(2)
     client_sock, client_info = server_sock.accept()
 
 def readAcc():
@@ -65,11 +66,13 @@ def controlAcc():
         else:
             sleep(0.05)
 
+       
 class EcoderGUI:
+    
     def readEntry(self,a,b):
         try:
             b=a.get()
-        except ValueError as ve:
+        except:
             a.set(b)
         return b   
 
@@ -78,9 +81,28 @@ class EcoderGUI:
         pr.cFilter = self.readEntry(self.cFilterTk,pr.cFilter)
         pr.aSensitivity = self.readEntry(self.aSensitivityTk,pr.aSensitivity)
         pr.aThreshold = self.readEntry(self.aThresholdTk,pr.aThreshold)
-
+        
+    def listenBt(self):
+        while not pr.killSystem:
+            while not pr.running:
+                try:
+                    startBt()
+                    pr.running=True
+                except:
+                    pr.running=False
+                    break
+            if pr.running:   
+                self.readParameters()
+                controlAccThread=threading.Thread(target=controlAcc, args=())
+                controlAccThread.start()
+                checkStateThread=threading.Thread(target=self.checkState, args=())
+                checkStateThread.start()
+                readAcc()
+                controlAccThread.join()
+                checkStateThread.join()
+        
     def loadParameters(self):
-        reader = csv.reader(open(pr.fPath, "rb"), delimiter=' ');
+        reader = csv.reader(open(pr.fPath, "rt"), delimiter=' ');
         l = list(reader);
         self.aSensitivityTk.set(l[0][0])
         self.aThresholdTk.set(l[0][1])
@@ -95,17 +117,17 @@ class EcoderGUI:
         self.keyForwardEntry.config(state=newState)
     
     def checkState(self):
+        self.changeStateEntry('disabled')
+        self.stateLabel.config(text="Connected")  
         while pr.running:
             self.accLabel.config(text=str(round(pr.rAcc,2)))
             sleep(0.2)
         try:
             self.accLabel.config(text="---")
             self.changeStateEntry('normal')
-            self.playButton.config(text="Start")  
+            self.stateLabel.config(text="Disconnected")  
         except:
             pass
-        self.controlAccThread.join()
-        self.readAccThread.join()
                 
     def playAction(self):
         global server_sock
@@ -117,10 +139,8 @@ class EcoderGUI:
             self.controlAccThread.start()
             self.readAccThread=threading.Thread(target=readAcc, args=())
             self.readAccThread.start()
-            self.changeStateEntry('disabled')
             self.checkStateThread=threading.Thread(target=self.checkState, args=())
             self.checkStateThread.start()
-            self.playButton.config(text="Stop")
         else:
             pr.running=False
 
@@ -132,15 +152,12 @@ class EcoderGUI:
 
     def createElements(self):
         self.content=ttk.Frame(self.master, padding = 5)
-        
         self.keyForwardEntry=ttk.Entry(self.content,textvariable=self.keyForwardTk)
         self.aThresholdEntry=ttk.Entry(self.content,textvariable=self.aThresholdTk)
         self.aSensitivityEntry=ttk.Entry(self.content,textvariable=self.aSensitivityTk)
         self.cFilterEntry=ttk.Entry(self.content,textvariable=self.cFilterTk)
-        
-        self.playButton=ttk.Button(self.content, text = 'Start', command=self.playAction)
+        self.stateLabel=ttk.Label(self.content, text = 'Disconnected')
         self.accLabel=ttk.Label(self.content, text = "---")
-        
         self.keyForwardLabel=ttk.Label(self.content, text = 'Key')
         self.aThresholdLabel=ttk.Label(self.content, text = 'Threshold')
         self.aSensitivityLabel=ttk.Label(self.content, text = 'Sensitivity')
@@ -148,7 +165,6 @@ class EcoderGUI:
 
     def placeElements(self):
         self.content.grid(column = 0, row = 0, sticky = (tk.N, tk.S, tk.E, tk.W))
-                
         self.keyForwardEntry.grid(column = 0, row = 0, sticky = (tk.N, tk.S, tk.E, tk.W))
         self.keyForwardLabel.grid(column = 1, row = 0, sticky = (tk.N, tk.S, tk.E, tk.W))
         self.aThresholdEntry.grid(column = 0, row = 1, sticky = (tk.N, tk.S, tk.E, tk.W))
@@ -157,7 +173,7 @@ class EcoderGUI:
         self.aSensitivityLabel.grid(column = 1, row = 2, sticky = (tk.N, tk.S, tk.E, tk.W))
         self.cFilterEntry.grid(column = 0, row = 3, sticky = (tk.N, tk.S, tk.E, tk.W))
         self.cFilterLabel.grid(column = 1, row = 3, sticky = (tk.N, tk.S, tk.E, tk.W))
-        self.playButton.grid(column = 0, row = 4, sticky = (tk.N, tk.S, tk.E, tk.W))
+        self.stateLabel.grid(column = 0, row = 4, sticky = (tk.N, tk.S, tk.E, tk.W))
         self.accLabel.grid(column = 1, row = 4, sticky = (tk.N, tk.S, tk.E, tk.W))
  
     def configCells(self):
@@ -173,6 +189,8 @@ class EcoderGUI:
         self.placeElements()
         self.configCells()
         self.loadParameters()
+        listenBtThread=threading.Thread(target=self.listenBt, args=())
+        listenBtThread.start()
              
 app = EcoderGUI(root)
 root.title('BtPedal')
